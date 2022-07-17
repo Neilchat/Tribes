@@ -21,6 +21,8 @@ import players.portfolioMCTS.PortfolioMCTSParams;
 import players.portfolioMCTS.PortfolioMCTSPlayer;
 import players.rhea.RHEAAgent;
 import players.rhea.RHEAParams;
+import players.stateAbstractMCTS.ASMCTSParams;
+import players.stateAbstractMCTS.ASMCTSPlayer;
 
 import static core.Constants.*;
 import static core.Types.TRIBE.*;
@@ -70,7 +72,8 @@ class Run {
         RHEA,
         OEP,
         EMCTS,
-        PORTFOLIO_MCTS
+        PORTFOLIO_MCTS,
+        ASMCTS
     }
 
     public static double K_INIT_MULT = 0.5;
@@ -102,6 +105,7 @@ class Run {
             case "OEP": return Run.PlayerType.OEP;
             case "pMCTS": return Run.PlayerType.PORTFOLIO_MCTS;
             case "EMCTS": return Run.PlayerType.EMCTS;
+            case "ASMCTS": return Run.PlayerType.ASMCTS;
         }
         throw new Exception("Error: unrecognized Player Type: " + arg);
     }
@@ -165,6 +169,15 @@ class Run {
                 mctsParams.FORCE_TURN_END = FORCE_TURN_END ? 5 : mctsParams.ROLLOUT_LENGTH + 1;
                 mctsParams.ROLOUTS_ENABLED = MCTS_ROLLOUTS;
                 return new MCTSPlayer(agentSeed, mctsParams);
+            case ASMCTS:
+                ASMCTSParams asmctsParams = new ASMCTSParams();
+                asmctsParams.stop_type = asmctsParams.STOP_FMCALLS;
+                asmctsParams.heuristic_method = asmctsParams.DIFF_HEURISTIC;
+                asmctsParams.PRIORITIZE_ROOT = true;
+                asmctsParams.ROLLOUT_LENGTH = MAX_LENGTH;
+                asmctsParams.FORCE_TURN_END = FORCE_TURN_END ? 5 : asmctsParams.ROLLOUT_LENGTH + 1;
+                asmctsParams.ROLOUTS_ENABLED = MCTS_ROLLOUTS;
+                return new ASMCTSPlayer(agentSeed, asmctsParams);
             case PORTFOLIO_MCTS:
                 PortfolioMCTSParams portfolioMCTSParams = new PortfolioMCTSParams();
                 portfolioMCTSParams.stop_type = portfolioMCTSParams.STOP_FMCALLS;

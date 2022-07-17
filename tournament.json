@@ -1,12 +1,12 @@
 {
   "Game Mode" : "Capitals",
-  "Repetitions" : 20,
+  "Repetitions" : 2,
   "Rollouts" : false,
   "Search Depth" : 20,
   "Force End" : false,
   "Population Size" : 1,
-  "Players" : ["MCTS", "pMCTS"],
-  "Tribes" : ["Xin Xi", "Imperius"],
+  "Players" : ["MCTS", "ASMCTS"],
+  "Tribes" : ["Imperius", "Xin Xi"],
   "Shift Tribes" : true,
   "Verbose" : false,
   "Level Seeds" : [
