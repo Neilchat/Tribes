@@ -6,7 +6,7 @@
   "Force End" : false,
   "Population Size" : 1,
   "Players" : ["MCTS", "ASMCTS"],
-  "Tribes" : ["Imperius", "Xin Xi"],
+  "Tribes" : ["Imperius", "Bardur"],
   "Shift Tribes" : true,
   "Verbose" : false,
   "Level Seeds" : [

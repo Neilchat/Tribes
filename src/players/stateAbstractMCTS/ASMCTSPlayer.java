@@ -74,6 +74,8 @@ public class ASMCTSPlayer extends Agent {
         }
         else abs = "advance";
 
+        double percWater = (percs(gs, Types.TERRAIN.SHALLOW_WATER) + percs(gs, Types.TERRAIN.DEEP_WATER))/(gs.getBoard().getSize()*2d);
+
         //todo add kill if enemy near
         //todo if water nearby research port
 
@@ -81,7 +83,7 @@ public class ASMCTSPlayer extends Agent {
 //        for (City city :gs.getCities(this.playerID)){
 //            city.canLevelUp()
 //        }
-        TreeNode m_root = new TreeNode(params, m_rnd, allActions.size(), allActions, this.playerID, true, abs, isClose(opponentUnits, cities), isClose(units, opponentCities));
+        TreeNode m_root = new TreeNode(params, m_rnd, allActions.size(), allActions, this.playerID, true, abs, isClose(opponentUnits, cities), isClose(units, opponentCities), percWater);
         m_root.setRootGameState(m_root, gs, allPlayerIDs);
 
         m_root.mctsSearch(ect);
@@ -104,15 +106,15 @@ public class ASMCTSPlayer extends Agent {
         return null;
     }
 
-    private boolean waterNoDock(GameState gs){
-        int count = 0;
+    private double percs(GameState gs, Types.TERRAIN terrain){
+        double count = 0;
 
         for (int i = 0 ; i< gs.getBoard().getSize(); i++) {
             for (int j = 0; j < gs.getBoard().getSize(); j++) {
-                if (gs.getBoard().getTerrainAt(i,j) == Types.TERRAIN.SHALLOW_WATER ||gs.getBoard().getTerrainAt(i,j) == Types.TERRAIN.DEEP_WATER) count ++;
+                if (gs.getBoard().getTerrainAt(i,j) == terrain) count ++;
             }
         }
-        return true;
+        return count;
     }
 
 

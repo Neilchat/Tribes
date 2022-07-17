@@ -3,6 +3,7 @@ package players.stateAbstractMCTS;
 import core.Types;
 import core.actions.Action;
 import core.actions.tribeactions.EndTurn;
+import core.actors.Building;
 import core.actors.City;
 import core.actors.units.Unit;
 import core.game.GameState;
@@ -34,6 +35,7 @@ public class TreeNode {
     private String abs;
     private City cityUnderAttack;
     private City cityToAttack;
+    private double water;
 
     private ArrayList<Action> actions;
     private GameState state;
@@ -42,12 +44,12 @@ public class TreeNode {
     private StateHeuristic rootStateHeuristic;
 
     //From MCTSPlayer
-    TreeNode(ASMCTSParams p, Random rnd, int num_actions, ArrayList<Action> actions, int playerID, boolean unitFirst, String abs, City cityUnderAttack, City cityToAttack) {
-        this(p, null, rnd, num_actions, actions, null, playerID, null, null, unitFirst, abs, cityUnderAttack, cityToAttack);
+    TreeNode(ASMCTSParams p, Random rnd, int num_actions, ArrayList<Action> actions, int playerID, boolean unitFirst, String abs, City cityUnderAttack, City cityToAttack, double water) {
+        this(p, null, rnd, num_actions, actions, null, playerID, null, null, unitFirst, abs, cityUnderAttack, cityToAttack, water);
     }
 
     private TreeNode(ASMCTSParams p, TreeNode parent, Random rnd, int num_actions,
-                           ArrayList<Action> actions, StateHeuristic sh, int playerID, TreeNode root, GameState state, boolean unitFirst, String abs, City cityUnderAttack, City cityToAttack) {
+                           ArrayList<Action> actions, StateHeuristic sh, int playerID, TreeNode root, GameState state, boolean unitFirst, String abs, City cityUnderAttack, City cityToAttack, double water) {
         this.params = p;
         this.fmCallsCount = 0;
         this.parent = parent;
@@ -70,6 +72,7 @@ public class TreeNode {
         this.abs = abs;
         this.cityUnderAttack = cityUnderAttack;
         this.cityToAttack = cityToAttack;
+        this.water = water;
 
     }
 
@@ -196,7 +199,7 @@ public class TreeNode {
         advance(nextState, availableActions.get(bestAction), true);
         ArrayList<Action> nextActions = getActions(this.m_depth+1, nextState);
         TreeNode tn = new TreeNode(params, this, this.m_rnd, nextActions.size(),
-        null, rootStateHeuristic, this.playerID, this.m_depth == 0 ? this : this.root, nextState, this.unitFirst, this.root.abs, this.root.cityUnderAttack, this.root.cityToAttack);
+        null, rootStateHeuristic, this.playerID, this.m_depth == 0 ? this : this.root, nextState, this.unitFirst, this.root.abs, this.root.cityUnderAttack, this.root.cityToAttack, this.root.water);
 
         updateNodeGroupsAndStats(depthToNode, depthToNodeGroups,  absNodeIDToStats, tn, this.m_depth+1, absNodeIDToSize, absNodeIDToNodes);
 
@@ -273,7 +276,6 @@ public class TreeNode {
             Defence defGs1 = getDefenceStats(gs1, cityUnderAttack);
             Defence defGs2 = getDefenceStats(gs2, cityUnderAttack);
 
-
             if (defParent.def!= defGs1.def){
                 return defGs1.def==defGs2.def;
             }
@@ -337,7 +339,6 @@ public class TreeNode {
             }
             return totLevel1 == totLevel2;
         } else {
-//            if (gs1.getTick() < 10) {
             int numRes1 = 0;
             for (Boolean res : gs1.getTribeTechTree(this.playerID).getResearched()) {
                 if (res) numRes1 += 1;
@@ -347,55 +348,86 @@ public class TreeNode {
                 if (res) numRes2 += 1;
             }
 
+            int numResPar = 0;
+            for (Boolean res : parentState.getTribeTechTree(this.playerID).getResearched()) {
+                if (res) numResPar += 1;
+            }
+
+            if (numRes1!=numResPar) return numRes2==numRes1;
+
             int rootHealthOther1 = 0;
-            for (Unit unit : parentState.getUnits((this.playerID+1)%2)){
+            int boats1 = 0;
+            for (Unit unit : gs1.getUnits((this.playerID+1)%2)){
                 rootHealthOther1 += unit.getCurrentHP();
+                if (unit.getType().isWaterUnit()) boats1+=1;
             }
 
+            int boats2 = 0;
             int rootHealthOther2 = 0;
-            for (Unit unit : parentState.getUnits((this.playerID+1)%2)){
+            for (Unit unit : gs2.getUnits((this.playerID+1)%2)){
                 rootHealthOther2 += unit.getCurrentHP();
+                if (unit.getType().isWaterUnit()) boats2+=1;
             }
 
-            if (this.m_rnd.nextBoolean()) return rootHealthOther1==rootHealthOther2;
+            int boatsPar = 0;
+            int rootHealthOtherPar = 0;
+            for (Unit unit : gs2.getUnits((this.playerID+1)%2)){
+                rootHealthOtherPar += unit.getCurrentHP();
+                if (unit.getType().isWaterUnit()) boatsPar+=1;
+            }
 
-            return numRes1 == numRes2;
-//            } else {
-//                double totDistParent = 0;
-//                for (City city : parentState.getCities((this.playerID + 1) % 2)) {
-//                    if (city.isCapital()) {
-//                        for (Unit unit : parentState.getUnits(this.playerID)) {
-//                            totDistParent += unit.getPosition().dist(city.getPosition());
-//                        }
-//                        break;
-//                    }
+
+            if (rootHealthOtherPar!=rootHealthOther1) return rootHealthOther2!=rootHealthOtherPar;
+
+
+//            if (this.water>0.3) {
+//                int parentPorts = numPorts(parentState);
+//                int gs1Ports = numPorts(gs1);
+//                int gs2Ports = numPorts(gs2);
+//                if (parentPorts == 0) {
+//                    if (parentState.getTribeTechTree(this.playerID).isResearched(Types.TECHNOLOGY.SAILING))
+//                        return gs1Ports == gs2Ports;
+//                    else if (parentState.getTribeTechTree(this.playerID).isResearched(Types.TECHNOLOGY.FISHING))
+//                        return gs1.getTribeTechTree(this.playerID).isResearched(Types.TECHNOLOGY.SAILING) == gs2.getTribeTechTree(this.playerID).isResearched(Types.TECHNOLOGY.SAILING);
+//                    else return gs1.getTribeTechTree(this.playerID).isResearched(Types.TECHNOLOGY.FISHING) == gs2.getTribeTechTree(this.playerID).isResearched(Types.TECHNOLOGY.FISHING);
 //                }
-//
-//
-//                double totDist1 = 0;
-//                for (City city : gs1.getCities((this.playerID + 1) % 2)) {
-//                    if (city.isCapital()) {
-//                        for (Unit unit : gs1.getUnits(this.playerID)) {
-//                            totDist1 += unit.getPosition().dist(city.getPosition());
-//                        }
-//                        break;
-//                    }
-//                }
-//                double totDist2 = 0;
-//                for (City city : gs2.getCities((this.playerID + 1) % 2)) {
-//                    if (city.isCapital()) {
-//                        for (Unit unit : gs2.getUnits(this.playerID)) {
-//                            totDist2 += unit.getPosition().dist(city.getPosition());
-//                        }
-//                        break;
-//                    }
-//                }
-//
-//                if (totDistParent > totDist1) return totDistParent > totDist2;
-//                if (totDistParent < totDist1) return totDistParent < totDist2;
-//                else return totDist1 == totDist2;
+//                return boats1 == boats2;
 //            }
+            double parDist = distToCapital(parentState);
+            double dist1 = distToCapital(gs1);
+            double dist2 = distToCapital(gs2);
+
+            if (parDist<dist1)
+                return parDist<dist2;
+            if (parDist>dist1)
+                return parDist>dist2;
+            if (parentState.getUnits(this.playerID).size()!=gs1.getUnits(this.playerID).size())
+                return parentState.getUnits(this.playerID).size() != gs2.getUnits(this.playerID).size();
         }
+        return false;
+    }
+
+    private double distToCapital(GameState gs){
+        double dist = 0;
+        for (City city: gs.getCities(this.playerID)){
+            if (city.isCapital()){
+                for (Unit unit : gs.getUnits(this.playerID)){
+                    dist+= unit.getPosition().dist(city.getPosition());
+                }
+                break;
+            }
+        }
+        return dist;
+    }
+
+    private int numPorts(GameState gs){
+        int num =0;
+        for (City city : gs.getCities(this.playerID)){
+            for (Building building : city.getBuildings()){
+                if (building.type== Types.BUILDING.PORT) num +=1;
+            }
+        }
+        return num;
     }
 
     private ArrayList<Action> getActions(int depth, GameState gs){
