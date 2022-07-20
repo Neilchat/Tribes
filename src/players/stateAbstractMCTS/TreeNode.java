@@ -9,6 +9,7 @@ import core.game.GameState;
 import players.heuristics.StateHeuristic;
 import utils.ElapsedCpuTimer;
 import utils.Pair;
+import utils.Vector2d;
 
 import java.util.*;
 
@@ -34,6 +35,7 @@ public class TreeNode {
     private String abs;
     private City cityUnderAttack;
     private City cityToAttack;
+    private Vector2d villagePos;
 
     private ArrayList<Action> actions;
     private GameState state;
@@ -42,12 +44,12 @@ public class TreeNode {
     private StateHeuristic rootStateHeuristic;
 
     //From MCTSPlayer
-    TreeNode(ASMCTSParams p, Random rnd, int num_actions, ArrayList<Action> actions, int playerID, boolean unitFirst, String abs, City cityUnderAttack, City cityToAttack) {
-        this(p, null, rnd, num_actions, actions, null, playerID, null, null, unitFirst, abs, cityUnderAttack, cityToAttack);
+    TreeNode(ASMCTSParams p, Random rnd, int num_actions, ArrayList<Action> actions, int playerID, boolean unitFirst, String abs, City cityUnderAttack, City cityToAttack, Vector2d villagePos) {
+        this(p, null, rnd, num_actions, actions, null, playerID, null, null, unitFirst, abs, cityUnderAttack, cityToAttack, villagePos);
     }
 
     private TreeNode(ASMCTSParams p, TreeNode parent, Random rnd, int num_actions,
-                           ArrayList<Action> actions, StateHeuristic sh, int playerID, TreeNode root, GameState state, boolean unitFirst, String abs, City cityUnderAttack, City cityToAttack) {
+                           ArrayList<Action> actions, StateHeuristic sh, int playerID, TreeNode root, GameState state, boolean unitFirst, String abs, City cityUnderAttack, City cityToAttack, Vector2d villagePos) {
         this.params = p;
         this.fmCallsCount = 0;
         this.parent = parent;
@@ -70,6 +72,7 @@ public class TreeNode {
         this.abs = abs;
         this.cityUnderAttack = cityUnderAttack;
         this.cityToAttack = cityToAttack;
+        this.villagePos = villagePos;
 
     }
 
@@ -196,7 +199,7 @@ public class TreeNode {
         advance(nextState, availableActions.get(bestAction), true);
         ArrayList<Action> nextActions = getActions(this.m_depth+1, nextState);
         TreeNode tn = new TreeNode(params, this, this.m_rnd, nextActions.size(),
-        null, rootStateHeuristic, this.playerID, this.m_depth == 0 ? this : this.root, nextState, this.unitFirst, this.root.abs, this.root.cityUnderAttack, this.root.cityToAttack);
+        null, rootStateHeuristic, this.playerID, this.m_depth == 0 ? this : this.root, nextState, this.unitFirst, this.root.abs, this.root.cityUnderAttack, this.root.cityToAttack, this.root.villagePos);
 
         updateNodeGroupsAndStats(depthToNode, depthToNodeGroups,  absNodeIDToStats, tn, this.m_depth+1, absNodeIDToSize, absNodeIDToNodes);
 
@@ -273,54 +276,83 @@ public class TreeNode {
             Defence defGs1 = getDefenceStats(gs1, cityUnderAttack);
             Defence defGs2 = getDefenceStats(gs2, cityUnderAttack);
 
+            boolean isDef1 = false;
+            for (Unit unit : gs1.getUnits(this.playerID)){
+                if (unit.getPosition().equals(cityUnderAttack.getPosition())) {
+                    isDef1 = true;
+                    break;
+                }
+            }
+            boolean isDef2 = false;
+            for (Unit unit : gs2.getUnits(this.playerID)){
+                if (unit.getPosition().equals(cityUnderAttack.getPosition())) {
+                    isDef2 = true;
+                    break;
+                }
+            }
 
-            if (defParent.def!= defGs1.def){
+            if (parentState.getTribeTechTree(this.playerID).isResearched(Types.TECHNOLOGY.SHIELDS))
                 return defGs1.def==defGs2.def;
-            }
+            else
+                return isDef1 == isDef2;
+//            }
 
-            if (defParent.dist>defGs1.dist){
-                return defParent.dist>defGs2.dist;
-            }
+//            if (depth%4==1){
+//                return defGs1.dist==defGs2.dist;
+//            }
+////
+////            if (depth%4==2){
+////                return defParent.dist<defGs2.dist;
+////            }
+//
+//            if (depth%4==2){
+//                return defGs1.number==defGs2.number;
+//            }
+//
+//            else {
+//                return defGs1.health==defGs2.health;
+//            }
 
-            if (defParent.dist<defGs1.dist && defParent.number == defGs1.number && defGs1.def==defParent.def){
-                return defParent.dist<defGs2.dist;
-            }
-
-            if (defParent.number!= defGs1.number){
-                return defGs1.number==defGs2.number;
-            }
-
-            if (defParent.health!= defGs1.health){
-                return defParent.health!=defGs2.health;
-            }
-
-            return defGs2.def==defGs1.def;
         } else if (abs.equalsIgnoreCase("capture")){
 
             Defence defParent = getDefenceStats(parentState, cityToAttack);
             Defence defGs1 = getDefenceStats(gs1, cityToAttack);
             Defence defGs2 = getDefenceStats(gs2, cityToAttack);
 
-            if (gs1.getCities((this.playerID+1)%2).size() != gs2.getCities((this.playerID+1)%2).size()) {
-                System.out.print(abs);
-            }
-            if (defParent.dist>defGs1.dist){
-                return defParent.dist>defGs2.dist;
-            }
+//            if (gs1.getCities((this.playerID+1)%2).size() != gs2.getCities((this.playerID+1)%2).size()) {
+//                System.out.print(abs);
+//            }
+//            if (depth%4==0){
+//                return defGs1.dist==defGs2.dist;
+//            }
+//
+////            if (defParent.dist<defGs1.dist && defParent.number == defGs1.number){
+////                return defParent.dist<defGs2.dist;
+////            }
+//
+//            if (depth%4==1){
+//                return defGs1.number==defGs2.number;
+//            }
+//
+//            if (depth%4==2){
+//                return defGs1.health!=defGs2.health;
+//            }
+            boolean isCapturing1 = false;
+            boolean isCapturing2 = false;
 
-            if (defParent.dist<defGs1.dist && defParent.number == defGs1.number){
-                return defParent.dist<defGs2.dist;
+            for (Unit unit : gs1.getUnits(this.playerID)){
+                if (unit.getPosition().equals(cityToAttack.getPosition())) {
+                    isCapturing1 = true;
+                    break;
+                }
             }
-
-            if (defParent.number!= defGs1.number){
-                return defGs1.number==defGs2.number;
+            for (Unit unit : gs2.getUnits(this.playerID)){
+                if (unit.getPosition().equals(cityToAttack.getPosition())) {
+                    isCapturing2 = true;
+                    break;
+                }
             }
-
-            if (defParent.health!= defGs1.health){
-                return defParent.health!=defGs2.health;
-            }
-
-            return gs1.getCities((this.playerID+1)%2).size() == gs2.getCities((this.playerID+1)%2).size();
+            return isCapturing1 == isCapturing2 || defGs1.dist==defGs2.dist;
         } else if (abs.equalsIgnoreCase("upgrade")){
 
             int totLevel1 = 0;
@@ -336,7 +368,49 @@ public class TreeNode {
                 System.out.print(abs);
             }
             return totLevel1 == totLevel2;
-        } else {
+        } else if (abs.equalsIgnoreCase("village")){
+            boolean isCapturing1 = false;
+            boolean isCapturing2 = false;
+
+            for (Unit unit : gs1.getUnits(this.playerID)){
+                if (unit.getPosition().equals(villagePos)) {
+                    isCapturing1 = true;
+                    break;
+                }
+            }
+            for (Unit unit : gs2.getUnits(this.playerID)){
+                if (unit.getPosition().equals(villagePos)) {
+                    isCapturing2 = true;
+                    break;
+                }
+            }
+            return isCapturing1 == isCapturing2;
+
+        } else if (abs.equalsIgnoreCase("dock")){
+            int count1 = 0;
+            for (int i = 0 ; i< gs1.getBoard().getSize(); i++) {
+                for (int j = 0; j < gs1.getBoard().getSize(); j++) {
+                    if (gs1.getBoard().getBuildingAt(i,j) == Types.BUILDING.PORT) count1 ++;
+                }
+            }
+            int count2 = 0;
+            for (int i = 0 ; i< gs2.getBoard().getSize(); i++) {
+                for (int j = 0; j < gs2.getBoard().getSize(); j++) {
+                    if (gs2.getBoard().getBuildingAt(i,j) == Types.BUILDING.PORT) count2 ++;
+                }
+            }
+            int countPar = 0;
+            for (int i = 0 ; i< parentState.getBoard().getSize(); i++) {
+                for (int j = 0; j < parentState.getBoard().getSize(); j++) {
+                    if (parentState.getBoard().getBuildingAt(i,j) == Types.BUILDING.PORT) countPar ++;
+                }
+            }
+            if (count1!=count2)
+                System.out.println("build dock");
+            if (countPar<count1 || countPar<count2)
+                return count1==count2;
+            return true;
+        } else{
 //            if (gs1.getTick() < 10) {
             int numRes1 = 0;
             for (Boolean res : gs1.getTribeTechTree(this.playerID).getResearched()) {
@@ -347,54 +421,88 @@ public class TreeNode {
                 if (res) numRes2 += 1;
             }
 
-            int rootHealthOther1 = 0;
-            for (Unit unit : parentState.getUnits((this.playerID+1)%2)){
-                rootHealthOther1 += unit.getCurrentHP();
-            }
-
-            int rootHealthOther2 = 0;
-            for (Unit unit : parentState.getUnits((this.playerID+1)%2)){
-                rootHealthOther2 += unit.getCurrentHP();
-            }
-
-            if (this.m_rnd.nextBoolean()) return rootHealthOther1==rootHealthOther2;
-
-            return numRes1 == numRes2;
-//            } else {
-//                double totDistParent = 0;
-//                for (City city : parentState.getCities((this.playerID + 1) % 2)) {
-//                    if (city.isCapital()) {
-//                        for (Unit unit : parentState.getUnits(this.playerID)) {
-//                            totDistParent += unit.getPosition().dist(city.getPosition());
-//                        }
-//                        break;
-//                    }
-//                }
-//
-//
-//                double totDist1 = 0;
-//                for (City city : gs1.getCities((this.playerID + 1) % 2)) {
-//                    if (city.isCapital()) {
-//                        for (Unit unit : gs1.getUnits(this.playerID)) {
-//                            totDist1 += unit.getPosition().dist(city.getPosition());
-//                        }
-//                        break;
-//                    }
-//                }
-//                double totDist2 = 0;
-//                for (City city : gs2.getCities((this.playerID + 1) % 2)) {
-//                    if (city.isCapital()) {
-//                        for (Unit unit : gs2.getUnits(this.playerID)) {
-//                            totDist2 += unit.getPosition().dist(city.getPosition());
-//                        }
-//                        break;
-//                    }
-//                }
-//
-//                if (totDistParent > totDist1) return totDistParent > totDist2;
-//                if (totDistParent < totDist1) return totDistParent < totDist2;
-//                else return totDist1 == totDist2;
+//            int rootHealthOther1 = 0;
+//            for (Unit unit : parentState.getUnits((this.playerID+1)%2)){
+//                rootHealthOther1 += unit.getCurrentHP();
 //            }
+//
+//            int rootHealthOther2 = 0;
+//            for (Unit unit : parentState.getUnits((this.playerID+1)%2)){
+//                rootHealthOther2 += unit.getCurrentHP();
+//            }
+//
+//            if (depth%3==0) return rootHealthOther1==rootHealthOther2;
+//            if (depth%3==1) return gs1.getUnits(this.playerID).size()==gs2.getUnits(this.playerID).size();
+
+            double furthestDist1 = 0;
+            int totHealth1 = 0;
+            for (City city : gs1.getCities(this.playerID)) {
+                if (city.isCapital()) {
+                    for (Unit unit : gs1.getUnits(this.playerID)) {
+                        totHealth1 +=unit.getCurrentHP();
+                        if (unit.getPosition().dist(city.getPosition())> furthestDist1)
+                            furthestDist1 = unit.getPosition().dist(city.getPosition());
+                    }
+                    break;
+                }
+            }
+            double furthestDist2 = 0;
+            int totHealth2 = 0;
+            for (City city : gs2.getCities(this.playerID )) {
+                if (city.isCapital()) {
+                    for (Unit unit : gs2.getUnits(this.playerID)) {
+                        totHealth2 +=unit.getCurrentHP();
+                        if (unit.getPosition().dist(city.getPosition())> furthestDist2)
+                            furthestDist2 = unit.getPosition().dist(city.getPosition());
+                    }
+                    break;
+                }
+            }
+
+            double distToEnemy1 = 0;
+            for (City city : gs1.getCities((this.playerID+1 )%2)) {
+                if (city.isCapital()) {
+                    for (Unit unit : gs1.getUnits(this.playerID)) {
+                        distToEnemy1 = +unit.getPosition().dist(city.getPosition());
+                    }
+                    break;
+                }
+            }
+
+            double distToEnemy2 = 0;
+            for (City city : gs2.getCities((this.playerID+1 )%2)) {
+                if (city.isCapital()) {
+                    for (Unit unit : gs2.getUnits(this.playerID)) {
+                        distToEnemy2 = +unit.getPosition().dist(city.getPosition());
+                    }
+                    break;
+                }
+            }
+
+            int totEnemyHealth1 = 0;
+            int totEnemyHealth2 = 0;
+
+            for (Unit unit : gs1.getUnits(this.playerID)) {
+                totEnemyHealth1 += unit.getCurrentHP();
+            }
+            for (Unit unit : gs2.getUnits(this.playerID)) {
+                totEnemyHealth2 += unit.getCurrentHP();
+            }
+
+            if (gs1.getTick()<10) {
+                if (gs1.getTick()%2==0)
+                    return numRes1 == numRes2;
+                else
+                    return furthestDist1 == furthestDist2;
+            } else {
+                return numRes1 == numRes2;
+//                if (gs1.getTick() % 3 == 0)
+//                    return distToEnemy1 == distToEnemy2;
+//                if (gs1.getTick() % 3 == 1)
+//                    return totEnemyHealth1 == totEnemyHealth2;
+//                else
+//                    return totHealth1 == totHealth2;
+            }
         }
     }
 

@@ -10,6 +10,7 @@ import players.Agent;
 import players.stateAbstractMCTS.ASMCTSParams;
 import players.stateAbstractMCTS.TreeNode;
 import utils.ElapsedCpuTimer;
+import utils.Vector2d;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -64,14 +65,17 @@ public class ASMCTSPlayer extends Agent {
                 break;
             }
         }
-        if (isClose(opponentUnits, cities)!=null){
+        if (nextToVillage(gs, units)!=null) {
+            abs = "village";
+        }
+        else if (isClose(opponentUnits, cities)!=null){
             abs = "defend";
         }
         else if (isClose(units, opponentCities)!=null){
             abs = "capture";
         } else if (cityCanUpgrade){
             abs = "upgrade";
-        }
+        } else if (waterNoDock(gs)) abs = "dock";
         else abs = "advance";
 
         //todo add kill if enemy near
@@ -81,7 +85,7 @@ public class ASMCTSPlayer extends Agent {
 //        for (City city :gs.getCities(this.playerID)){
 //            city.canLevelUp()
 //        }
-        TreeNode m_root = new TreeNode(params, m_rnd, allActions.size(), allActions, this.playerID, true, abs, isClose(opponentUnits, cities), isClose(units, opponentCities));
+        TreeNode m_root = new TreeNode(params, m_rnd, allActions.size(), allActions, this.playerID, true, abs, isClose(opponentUnits, cities), isClose(units, opponentCities), nextToVillage(gs,units));
         m_root.setRootGameState(m_root, gs, allPlayerIDs);
 
         m_root.mctsSearch(ect);
@@ -104,15 +108,26 @@ public class ASMCTSPlayer extends Agent {
         return null;
     }
 
+    private Vector2d nextToVillage(GameState gs, ArrayList<Unit> units){
+        for (Unit unit: units){
+            for (Vector2d pos : unit.getPosition().neighborhood(1, 0, gs.getBoard().getSize())){
+                if (gs.getBoard().getTerrainAt(pos.x, pos.y)==Types.TERRAIN.VILLAGE)
+                    return pos;
+            }
+        }
+        return null;
+    }
+
     private boolean waterNoDock(GameState gs){
-        int count = 0;
+        double count = 0;
 
         for (int i = 0 ; i< gs.getBoard().getSize(); i++) {
             for (int j = 0; j < gs.getBoard().getSize(); j++) {
                 if (gs.getBoard().getTerrainAt(i,j) == Types.TERRAIN.SHALLOW_WATER ||gs.getBoard().getTerrainAt(i,j) == Types.TERRAIN.DEEP_WATER) count ++;
             }
         }
-        return true;
+
+        return (count/(gs.getBoard().getSize()*gs.getBoard().getSize())> 0.4 && gs.getTribeTechTree(this.playerID).isResearched(Types.TECHNOLOGY.SAILING));
     }
 
 
