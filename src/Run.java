@@ -4,6 +4,8 @@ import org.json.JSONArray;
 import players.*;
 import gui.GUI;
 import gui.WindowInput;
+import players.abstractPortfolioMCTS.AbstractPortfolioMCTSParams;
+import players.abstractPortfolioMCTS.AbstractPortfolioMCTSPlayer;
 import players.emcts.EMCTSAgent;
 import players.emcts.EMCTSParams;
 import players.heuristics.PrunePortfolioHeuristic;
@@ -73,7 +75,8 @@ class Run {
         OEP,
         EMCTS,
         PORTFOLIO_MCTS,
-        ASMCTS
+        ASMCTS,
+        ASPMCTS
     }
 
     public static double K_INIT_MULT = 0.5;
@@ -106,6 +109,7 @@ class Run {
             case "pMCTS": return Run.PlayerType.PORTFOLIO_MCTS;
             case "EMCTS": return Run.PlayerType.EMCTS;
             case "ASMCTS": return Run.PlayerType.ASMCTS;
+            case "ASPMCTS": return Run.PlayerType.ASPMCTS;
         }
         throw new Exception("Error: unrecognized Player Type: " + arg);
     }
@@ -196,6 +200,24 @@ class Run {
                 if(Run.pMCTSweights != null)
                     portfolioMCTSParams.pruneHeuristic.setWeights(Run.pMCTSweights);
                 return new PortfolioMCTSPlayer(agentSeed, portfolioMCTSParams);
+            case ASPMCTS:
+                AbstractPortfolioMCTSParams abstractPortfolioMCTSParams = new AbstractPortfolioMCTSParams();
+                abstractPortfolioMCTSParams.stop_type = abstractPortfolioMCTSParams.STOP_FMCALLS;
+                abstractPortfolioMCTSParams.heuristic_method = abstractPortfolioMCTSParams.DIFF_HEURISTIC;
+                abstractPortfolioMCTSParams.PRIORITIZE_ROOT = false;
+                abstractPortfolioMCTSParams.ROLLOUT_LENGTH = MAX_LENGTH;
+                abstractPortfolioMCTSParams.PRUNING = PRUNING;
+                abstractPortfolioMCTSParams.PROGBIAS = PROGBIAS;
+                abstractPortfolioMCTSParams.K_init_mult = K_INIT_MULT;
+                abstractPortfolioMCTSParams.A_mult = A_MULT;
+                abstractPortfolioMCTSParams.B = B;
+                abstractPortfolioMCTSParams.T_mult = T_MULT;
+                Portfolio p2 = new SimplePortfolio(agentSeed);
+                abstractPortfolioMCTSParams.setPortfolio(p2);
+                abstractPortfolioMCTSParams.pruneHeuristic = new PrunePortfolioHeuristic(p2);
+                if(Run.pMCTSweights != null)
+                    abstractPortfolioMCTSParams.pruneHeuristic.setWeights(Run.pMCTSweights);
+                return new AbstractPortfolioMCTSPlayer(agentSeed, abstractPortfolioMCTSParams);
             case OEP:
                 OEPParams oepParams = new OEPParams();
                 oepParams.stop_type = oepParams.STOP_FMCALLS;

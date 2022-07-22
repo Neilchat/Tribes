@@ -1,27 +1,32 @@
-package players.stateAbstractMCTS;
+package players.abstractPortfolioMCTS;
 
 import core.Types;
 import core.actions.Action;
-import core.actions.tribeactions.EndTurn;
 import core.actors.City;
 import core.actors.units.Unit;
 import core.game.GameState;
+import players.heuristics.PruneHeuristic;
 import players.heuristics.StateHeuristic;
+import players.portfolio.ActionAssignment;
+import players.stateAbstractMCTS.TreeNode;
 import utils.ElapsedCpuTimer;
 import utils.Pair;
+import utils.Utils;
 import utils.Vector2d;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Random;
 
-import static core.Types.ACTION.END_TURN;
+public class AbstractPortfolioTreeNode
+{
+    private AbstractPortfolioMCTSParams params;
 
-public class TreeNode {
-
-    private ASMCTSParams params;
-
-    private TreeNode root;
-    private TreeNode parent;
-    private TreeNode[] children;
+    private AbstractPortfolioTreeNode root;
+    private AbstractPortfolioTreeNode parent;
+    private AbstractPortfolioTreeNode[] children;
+    private boolean[] pruned;
     private double totValue;
     private int nVisits;
     private Random m_rnd;
@@ -29,46 +34,49 @@ public class TreeNode {
     private double[] bounds = new double[]{Double.MAX_VALUE, -Double.MAX_VALUE};
     private int fmCallsCount;
     private int playerID;
-    private int unitType;
-    private boolean unitFirst;
+    private int k_plus;
+
     private int absNodeID;
     private String abs;
     private City cityUnderAttack;
     private City cityToAttack;
     private Vector2d villagePos;
 
-    private ArrayList<Action> actions;
+    private ArrayList<ActionAssignment> actions;
     private GameState state;
 
     private GameState rootState;
     private StateHeuristic rootStateHeuristic;
+    private PruneHeuristic rootPruneHeuristic;
 
     //From MCTSPlayer
-    TreeNode(ASMCTSParams p, Random rnd, int num_actions, ArrayList<Action> actions, int playerID, boolean unitFirst, String abs, City cityUnderAttack, City cityToAttack, Vector2d villagePos) {
-        this(p, null, rnd, num_actions, actions, null, playerID, null, null, unitFirst, abs, cityUnderAttack, cityToAttack, villagePos);
+    AbstractPortfolioTreeNode(AbstractPortfolioMCTSParams p, Random rnd, int playerID, String abs, City cityUnderAttack, City cityToAttack, Vector2d villagePos) {
+        this(p, null, rnd, 0, null, null, null, playerID, null, null, abs, cityUnderAttack, cityToAttack, villagePos);
     }
 
-    private TreeNode(ASMCTSParams p, TreeNode parent, Random rnd, int num_actions,
-                           ArrayList<Action> actions, StateHeuristic sh, int playerID, TreeNode root, GameState state, boolean unitFirst, String abs, City cityUnderAttack, City cityToAttack, Vector2d villagePos) {
+    private AbstractPortfolioTreeNode(AbstractPortfolioMCTSParams p, AbstractPortfolioTreeNode parent, Random rnd, int num_actions,
+                              ArrayList<ActionAssignment> actions, StateHeuristic sh, PruneHeuristic ph, int playerID, AbstractPortfolioTreeNode root, GameState state
+            , String abs, City cityUnderAttack, City cityToAttack, Vector2d villagePos) {
         this.params = p;
         this.fmCallsCount = 0;
         this.parent = parent;
         this.m_rnd = rnd;
         this.actions = actions;
         this.root = root;
-        children = new TreeNode[num_actions];
+        children = new AbstractPortfolioTreeNode[num_actions];
+        pruned = null;
         totValue = 0.0;
+        k_plus = 0;
         this.playerID = playerID;
         this.state = state;
         if(parent != null) {
             m_depth = parent.m_depth + 1;
             this.rootStateHeuristic = sh;
+            this.rootPruneHeuristic = ph;
         }
         else {
             m_depth = 0;
         }
-        this.unitType = m_depth%3;
-        this.unitFirst = unitFirst;
         this.abs = abs;
         this.cityUnderAttack = cityUnderAttack;
         this.cityToAttack = cityToAttack;
@@ -76,16 +84,27 @@ public class TreeNode {
 
     }
 
-    void setAbsNodeID(int id){
-        this.absNodeID = id;
-    }
-
-    void setRootGameState(TreeNode root, GameState gs, ArrayList<Integer> allIDs)
+    void setRootGameState(AbstractPortfolioTreeNode root, GameState gs, ArrayList<Integer> allIDs)
     {
         this.state = gs;
         this.root = root;
         this.rootState = gs;
         this.rootStateHeuristic = params.getStateHeuristic(playerID, allIDs);
+
+        //Init portfolio and action assignments at the root
+        this.actions = this.params.getPortfolio().produceActionAssignments(gs);
+        this.children = new AbstractPortfolioTreeNode[this.actions.size()];
+        this.pruned = null;
+        this.rootPruneHeuristic = params.getPruneHeuristic();
+
+//        System.out.println("N Actions at root: " + this.actions.size());
+//        for(ActionAssignment aas : this.actions)
+//            System.out.println(aas);
+
+    }
+
+    void setAbsNodeID(int id){
+        this.absNodeID = id;
     }
 
 
@@ -99,15 +118,15 @@ public class TreeNode {
         int remainingLimit = 5;
         boolean stop = false;
 
-        HashMap<Integer, TreeNode> depthToNode = new HashMap<Integer, TreeNode>();
-        HashMap<Integer, List<ArrayList<TreeNode>>> depthToNodeGroups = new HashMap<>();
-        HashMap<Integer, ArrayList<TreeNode>> absNodeIDToNodes = new HashMap<>();
+        HashMap<Integer, AbstractPortfolioTreeNode> depthToNode = new HashMap<Integer, AbstractPortfolioTreeNode>();
+        HashMap<Integer, List<ArrayList<AbstractPortfolioTreeNode>>> depthToNodeGroups = new HashMap<>();
+        HashMap<Integer, ArrayList<AbstractPortfolioTreeNode>> absNodeIDToNodes = new HashMap<>();
         HashMap<Integer, Pair<Double, Integer>> absNodeIDToStats = new HashMap<>();
         HashMap<Integer, Integer> absNodeIDToSize = new HashMap<>();
 
         absNodeIDToSize.put(0, 1);
         absNodeIDToStats.put(0, new Pair<>(0d,0));
-        ArrayList<TreeNode> ng = new ArrayList<>();
+        ArrayList<AbstractPortfolioTreeNode> ng = new ArrayList<>();
         ng.add(this);
         absNodeIDToNodes.put(0, ng);
 
@@ -117,7 +136,7 @@ public class TreeNode {
         while(!stop){
 //            System.out.println("------- " + root.actions.size() + " -------");
             ElapsedCpuTimer elapsedTimerIteration = new ElapsedCpuTimer();
-            TreeNode selected = treePolicy(depthToNode, depthToNodeGroups, absNodeIDToStats, absNodeIDToSize, absNodeIDToNodes);
+            AbstractPortfolioTreeNode selected = treePolicy(depthToNode, depthToNodeGroups, absNodeIDToStats, absNodeIDToSize, absNodeIDToNodes);
             double delta = selected.rollOut();
             backUp(selected, delta, absNodeIDToStats, absNodeIDToSize, absNodeIDToNodes);
             numIters++;
@@ -137,11 +156,11 @@ public class TreeNode {
         }
     }
 
-    private TreeNode treePolicy(HashMap depthToNode, HashMap<Integer, List<ArrayList<TreeNode>>> depthToNodeGroups, HashMap<Integer, Pair<Double, Integer>> absNodeIDToStats, HashMap<Integer, Integer> absNodeIDToSize, HashMap<Integer, ArrayList<TreeNode>> absNodeIDToNodes) {
+    private AbstractPortfolioTreeNode treePolicy(HashMap depthToNode, HashMap<Integer, List<ArrayList<AbstractPortfolioTreeNode>>> depthToNodeGroups, HashMap<Integer, Pair<Double, Integer>> absNodeIDToStats, HashMap<Integer, Integer> absNodeIDToSize, HashMap<Integer, ArrayList<AbstractPortfolioTreeNode>> absNodeIDToNodes) {
 
-        TreeNode cur = this;
+        AbstractPortfolioTreeNode cur = this;
 
-        while (!cur.state.isGameOver() /*&& state.getAllAvailableActions().size() > 1 */ && cur.m_depth < params.ROLLOUT_LENGTH)
+        while (!cur.state.isGameOver() && cur.m_depth < params.ROLLOUT_LENGTH)
         {
             if (cur.notFullyExpanded()) {
                 return cur.expand(depthToNode, depthToNodeGroups, absNodeIDToStats,  absNodeIDToSize, absNodeIDToNodes);
@@ -154,67 +173,285 @@ public class TreeNode {
         return cur;
     }
 
-    private int tryForceEnd(GameState state, EndTurn endTurn, int depth)
-    {
-        boolean willForceEnd = (depth > 0 && (depth % params.FORCE_TURN_END) == 0) && endTurn.isFeasible(state);
-        if(!willForceEnd)
-            return -1; //Not the time, or not available.
 
-        ArrayList<Action> availableActions = state.getAllAvailableActions();
-        int actionIdx = 0;
-        while(actionIdx < availableActions.size())
-        {
-            Action act = availableActions.get(actionIdx);
-            if(act.getActionType() == END_TURN)
-            {
-                //Here's the end turn, return it's index.
-                return actionIdx;
-            }else actionIdx++;
-        }
-
-        //This should not happen, but EndTurn is not available here.
-        return -1;
-    }
-
-    private TreeNode expand(HashMap depthToNode, HashMap<Integer, List<ArrayList<TreeNode>>> depthToNodeGroups, HashMap<Integer, Pair<Double, Integer>> absNodeIDToStats, HashMap<Integer, Integer> absNodeIDToSize, HashMap<Integer, ArrayList<TreeNode>> absNodeIDToNodes) {
+    private AbstractPortfolioTreeNode expand(HashMap depthToNode, HashMap<Integer, List<ArrayList<AbstractPortfolioTreeNode>>> depthToNodeGroups, HashMap<Integer, Pair<Double, Integer>> absNodeIDToStats, HashMap<Integer, Integer> absNodeIDToSize, HashMap<Integer, ArrayList<AbstractPortfolioTreeNode>> absNodeIDToNodes) {
 
         int bestAction = -1;
-        if(bestAction == -1)
-        {
-            //No turn end, expand
-            double bestValue = -1;
 
-            for (int i = 0; i < children.length; i++) {
-                double x = m_rnd.nextDouble();
-                if (x > bestValue && children[i] == null) {
-                    bestAction = i;
-                    bestValue = x;
-                }
+        //No turn end, expand
+        double bestValue = -1;
+
+        for (int i = 0; i < children.length; i++) {
+            double x = m_rnd.nextDouble();
+            if (x > bestValue && children[i] == null) {
+                bestAction = i;
+                bestValue = x;
             }
         }
 
         //Roll the state, create a new node and assign it.
         GameState nextState = state.copy();
-        ArrayList<Action> availableActions = getActions(this.m_depth, nextState);
-        advance(nextState, availableActions.get(bestAction), true);
-        ArrayList<Action> nextActions = getActions(this.m_depth+1, nextState);
-        TreeNode tn = new TreeNode(params, this, this.m_rnd, nextActions.size(),
-        null, rootStateHeuristic, this.playerID, this.m_depth == 0 ? this : this.root, nextState, this.unitFirst, this.root.abs, this.root.cityUnderAttack, this.root.cityToAttack, this.root.villagePos);
-
+        ArrayList<ActionAssignment> nextActions = advance(nextState, actions.get(bestAction), true);
+        AbstractPortfolioTreeNode tn = new AbstractPortfolioTreeNode(params, this, this.m_rnd, nextActions.size(),
+                nextActions, rootStateHeuristic, rootPruneHeuristic, this.playerID, this.m_depth == 0 ? this : this.root, nextState, this.root.abs, this.root.cityUnderAttack, this.root.cityToAttack, this.root.villagePos);
         updateNodeGroupsAndStats(depthToNode, depthToNodeGroups,  absNodeIDToStats, tn, this.m_depth+1, absNodeIDToSize, absNodeIDToNodes);
-
         children[bestAction] = tn;
         return tn;
     }
 
-    private void updateNodeGroupsAndStats(HashMap depthToNode, HashMap<Integer, List<ArrayList<TreeNode>>> depthToNodeGroups, HashMap<Integer, Pair<Double, Integer>> absNodeIDToStats, TreeNode tn, int depth, HashMap<Integer, Integer> absNodeIDToSize, HashMap<Integer, ArrayList<TreeNode>> absNodeIDToNodes){
-        List<ArrayList<TreeNode>> nodeGroups = depthToNodeGroups.get(depth);
+    private ArrayList<ActionAssignment> advance(GameState gs, ActionAssignment actionAssignment, boolean computeActions)
+    {
+        Action act = actionAssignment.getAction();
+        gs.advance(act, computeActions);
+        root.fmCallsCount++;
+        return params.getPortfolio().produceActionAssignments(gs);
+    }
+
+
+    private AbstractPortfolioTreeNode uct(HashMap<Integer, Pair<Double, Integer>> absNodeIDToStats, HashMap<Integer, ArrayList<AbstractPortfolioTreeNode>> absNodeIDToNodes) {
+
+
+        AbstractPortfolioTreeNode selected;
+        boolean IamMoving = (state.getActiveTribeID() == this.playerID);
+
+        //No end turn, use uct.
+        double[] vals = new double[this.children.length];
+        double[] absvals = new double[this.children.length];
+
+        for(int i = 0; i < this.children.length; ++i)
+        {
+            if(pruned != null && !pruned[i]) {
+
+                AbstractPortfolioTreeNode child = children[i];
+
+                double hvVal = child.totValue;
+                double childValue = hvVal / (child.nVisits + params.epsilon);
+                childValue = Utils.normalise(childValue, bounds[0], bounds[1]);
+                double exploreValue = Math.sqrt(Math.log(this.nVisits + 1) / (child.nVisits + params.epsilon));
+                double progBias = rootPruneHeuristic.evaluatePrune(state, actions.get(i)) / (child.nVisits + params.epsilon);
+
+                double uctValue = childValue +
+                        params.C * exploreValue;
+
+                if(params.PROGBIAS)
+                    uctValue += progBias;
+
+                double absHvVal = absNodeIDToStats.get(child.absNodeID).getFirst();
+                double absChildValue =  absHvVal / (absNodeIDToStats.get(child.absNodeID).getSecond() + params.epsilon);
+                absChildValue = Utils.normalise(absChildValue, bounds[0], bounds[1]);
+
+                double absExploreValue = Math.sqrt(Math.log(this.nVisits + 1) / (absNodeIDToStats.get(child.absNodeID).getSecond()  + params.epsilon));
+                double absProgBias = rootPruneHeuristic.evaluatePrune(state, actions.get(i)) / (absNodeIDToStats.get(child.absNodeID).getSecond() + params.epsilon);
+
+                double absUctValue = absChildValue +
+                        params.C * absExploreValue;
+
+                if(params.PROGBIAS)
+                    absUctValue += absProgBias;
+
+
+                uctValue = noise(uctValue, params.epsilon, this.m_rnd.nextDouble());     //break ties randomly
+
+//            double defValue = (childValue + params.K * exploreValue);
+//            System.out.println("Default UCT: " + defValue +  ", UCT: " + uctValue +
+//                    ", Q: " + childValue + ", explore: " + exploreValue + ", prog. Bias: " + progBias);
+
+                vals[i] = uctValue;
+                absvals[i] = absUctValue;
+            }
+        }
+
+
+        double bestValue = IamMoving ? -Double.MAX_VALUE : Double.MAX_VALUE;
+        double bestAbsValue = IamMoving ? -Double.MAX_VALUE : Double.MAX_VALUE;
+
+        for (double absval : absvals) {
+            if ((IamMoving && absval >= bestAbsValue) || (!IamMoving && absval <= bestAbsValue)) {
+                bestAbsValue = absval;
+            }
+        }
+
+        int which = -1;
+
+        for(int i = 0; i < vals.length; ++i) {
+            if (absvals[i]!=bestAbsValue) continue;
+            if ((IamMoving && vals[i] > bestValue) || (!IamMoving && vals[i] < bestValue)) {
+                which = i;
+                bestValue = vals[i];
+            }
+        }
+
+
+        if (which == -1)
+        {
+            //if(this.children.length == 0)
+            System.out.println("Warning! couldn't find the best UCT value " + which + " : " + this.children.length + " " +
+                    //throw new RuntimeException("Warning! couldn't find the best UCT value " + which + " : " + this.children.length + " " +
+                    + bounds[0] + " " + bounds[1]);
+            System.out.print(this.m_depth + ", AmIMoving? " + IamMoving + ";");
+            for(int i = 0; i < this.children.length; ++i)
+                System.out.printf(" %f2", vals[i]);
+            System.out.println("; selected: " + which);
+
+            which = m_rnd.nextInt(children.length);
+        }
+
+        selected = children[which];
+
+//            System.out.print(this.m_depth + ", AmIMoving? " + IamMoving + ";");
+//            for(int i = 0; i < this.children.length; ++i)
+//                System.out.printf(" %f2", vals[i]);
+//            System.out.println("; selected: " + which);
+
+        //Roll the state. This is closed loop, we don't advance the state. We can't do open loop here because the
+        // number of actions available on a state depend on the state itself, and random events triggered by multiple
+        // runs over the same tree node would have different outcomes (i.e Examine ruins).
+        //advance(state, actions.get(selected.childIdx), true);
+
+        root.fmCallsCount++;
+
+        return selected;
+    }
+
+    private double rollOut()
+    {
+        if(params.ROLOUTS_ENABLED) {
+            GameState rolloutState = state.copy();
+            int thisDepth = this.m_depth;
+            while (!finishRollout(rolloutState, thisDepth)) {
+                ArrayList<ActionAssignment> allActionPairs = params.getPortfolio().produceActionAssignments(rolloutState);
+                ActionAssignment next = allActionPairs.get(m_rnd.nextInt(allActionPairs.size()));
+                advance(rolloutState, next, true);
+                thisDepth++;
+            }
+            return Utils.normalise(this.rootStateHeuristic.evaluateState(root.rootState, rolloutState), 0, 1);
+        }
+
+        return Utils.normalise(this.rootStateHeuristic.evaluateState(root.rootState, this.state), 0, 1);
+    }
+
+    private boolean finishRollout(GameState rollerState, int depth)
+    {
+        if (depth >= params.ROLLOUT_LENGTH)      //rollout end condition.
+            return true;
+
+        //end of game
+        return rollerState.isGameOver();
+    }
+
+
+    private void backUp(AbstractPortfolioTreeNode node, double result, HashMap<Integer, Pair<Double, Integer>> absNodeIDToStats, HashMap<Integer, Integer> absNodeIDToSize, HashMap<Integer, ArrayList<AbstractPortfolioTreeNode>> absNodeIdToNodes)
+    {
+        AbstractPortfolioTreeNode n = node;
+        while(n != null)
+        {
+            n.nVisits++;
+            n.totValue += result;
+            if (result < n.bounds[0]) {
+                n.bounds[0] = result;
+            }
+            if (result > n.bounds[1]) {
+                n.bounds[1] = result;
+            }
+            int size = absNodeIdToNodes.get(n.absNodeID).size();
+            Pair<Double, Integer> lastStats = absNodeIDToStats.get(n.absNodeID);
+            Double newTot = lastStats.getFirst()*(size-1)/size + n.totValue/size;
+            Integer newVisit = lastStats.getSecond()*(size-1)/size + n.nVisits/size;
+            absNodeIDToStats.remove(n.absNodeID);
+            absNodeIDToStats.put(n.absNodeID, new Pair<>(newTot, newVisit));
+
+            n = n.parent;
+        }
+    }
+
+
+    int mostVisitedAction() {
+        int selected = -1;
+        double bestValue = -Double.MAX_VALUE;
+        boolean allEqual = true;
+        double first = -1;
+
+        for (int i=0; i<children.length; i++) {
+
+            if(children[i] != null)
+            {
+                if(first == -1)
+                    first = children[i].nVisits;
+                else if(first != children[i].nVisits)
+                {
+                    allEqual = false;
+                }
+
+                double childValue = children[i].nVisits;
+                childValue = noise(childValue, params.epsilon, this.m_rnd.nextDouble());     //break ties randomly
+                if (childValue > bestValue) {
+                    bestValue = childValue;
+                    selected = i;
+                }
+            }
+        }
+
+        if (selected == -1)
+        {
+            selected = 0;
+        }else if(allEqual)
+        {
+            //If all are equal, we opt to choose for the one with the best Q.
+            selected = bestAction();
+        }
+
+        return selected;
+    }
+
+    public int bestAction()
+    {
+        int selected = -1;
+        double bestValue = -Double.MAX_VALUE;
+
+        for (int i=0; i<children.length; i++) {
+
+            if(children[i] != null) {
+                double childValue = children[i].totValue / (children[i].nVisits + params.epsilon);
+                childValue = noise(childValue, params.epsilon, this.m_rnd.nextDouble());     //break ties randomly
+                if (childValue > bestValue) {
+                    bestValue = childValue;
+                    selected = i;
+                }
+            }
+        }
+
+        if (selected == -1)
+        {
+            System.out.println("Unexpected selection!");
+            selected = 0;
+        }
+
+        return selected;
+    }
+
+    public ArrayList<ActionAssignment> getActions() {
+        return actions;
+    }
+
+
+    private boolean notFullyExpanded() {
+        for (AbstractPortfolioTreeNode tn : children) {
+            if (tn == null) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void updateNodeGroupsAndStats(HashMap depthToNode, HashMap<Integer, List<ArrayList<AbstractPortfolioTreeNode>>> depthToNodeGroups, HashMap<Integer, Pair<Double, Integer>> absNodeIDToStats, AbstractPortfolioTreeNode tn, int depth, HashMap<Integer, Integer> absNodeIDToSize, HashMap<Integer, ArrayList<AbstractPortfolioTreeNode>> absNodeIDToNodes){
+        List<ArrayList<AbstractPortfolioTreeNode>> nodeGroups = depthToNodeGroups.get(depth);
         if (nodeGroups==null) {
 
             //Make first group
-            ArrayList<TreeNode> ng = new ArrayList<>();
+            ArrayList<AbstractPortfolioTreeNode> ng = new ArrayList<>();
             ng.add(tn);
-            List<ArrayList<TreeNode>> groups = new ArrayList<ArrayList<TreeNode>>();
+            List<ArrayList<AbstractPortfolioTreeNode>> groups = new ArrayList<ArrayList<AbstractPortfolioTreeNode>>();
             groups.add(ng);
             depthToNodeGroups.put(depth, groups);
 
@@ -229,7 +466,7 @@ public class TreeNode {
         } else {
             boolean groupFound = false;
             for (int i =0; i<nodeGroups.size();i++) {
-                ArrayList<TreeNode> nodeGroup= nodeGroups.get(i);
+                ArrayList<AbstractPortfolioTreeNode> nodeGroup= nodeGroups.get(i);
                 if (tn.parent.equals(nodeGroup.get(0).parent) && compareStates(nodeGroup.get(0).state, tn.state, depth, tn.abs, tn.parent.state, tn.cityUnderAttack)) {
 //                    depthToNodeGroups.get(depth).remove(nodeGroup);
                     tn.setAbsNodeID(depth*10000+i);
@@ -252,7 +489,7 @@ public class TreeNode {
             if (!groupFound) {
                 tn.setAbsNodeID(depth*10000+nodeGroups.size());
 
-                ArrayList<TreeNode> ng = new ArrayList<>();
+                ArrayList<AbstractPortfolioTreeNode> ng = new ArrayList<>();
                 ng.add(tn);
 
                 absNodeIDToNodes.put(depth*10000+nodeGroups.size(), ng);
@@ -530,270 +767,40 @@ public class TreeNode {
         return new Defence(rootDef, rootDist, rootUnits, rootHealthOther);
     }
 
-    private void advance(GameState gs, Action act, boolean computeActions)
-    {
-        gs.advance(act, computeActions);
-        root.fmCallsCount++;
-    }
 
-
-    private TreeNode uct(HashMap<Integer, Pair<Double, Integer>> absNodeIDToStats, HashMap<Integer, ArrayList<TreeNode>> absNodeIDToNodes) {
-
-        TreeNode selected;
-        boolean IamMoving = (state.getActiveTribeID() == this.playerID);
-
-//        if (this.m_depth!=0){
-//            System.out.print("");
-//        }
-
-        int bestAction = -1;
-        if(bestAction == -1)
-        {
-            //No end turn, use uct.
-            double[] vals = new double[this.children.length];
-            double[] absvals = new double[this.children.length];
-
-            for(int i = 0; i < this.children.length; ++i)
-            {
-                TreeNode child = children[i];
-
-                double hvVal = child.totValue;
-                double childValue =  hvVal / (child.nVisits + params.epsilon);
-                childValue = normalise(childValue, bounds[0], bounds[1]);
-
-                double uctValue = childValue +
-                        params.K * Math.sqrt(Math.log(this.nVisits + 1) / (child.nVisits + params.epsilon));
-
-                double absHvVal = absNodeIDToStats.get(child.absNodeID).getFirst();
-                double absChildValue =  absHvVal / (absNodeIDToStats.get(child.absNodeID).getSecond() + params.epsilon);
-                absChildValue = normalise(absChildValue, bounds[0], bounds[1]);
-
-                double absUctValue = absChildValue +
-                        params.K * Math.sqrt(Math.log(this.nVisits + 1) / (absNodeIDToStats.get(child.absNodeID).getSecond() + params.epsilon));
-
-                uctValue = noise(uctValue, params.epsilon, this.m_rnd.nextDouble());     //break ties randomly
-                vals[i] = uctValue;
-                absvals[i] = absUctValue;
-            }
-
-//            if (!Arrays.stream(absvals).max().equals(Arrays.stream(absvals).min())){
-//                System.out.println(2);
-//            }
-
-            double bestValue = IamMoving ? -Double.MAX_VALUE : Double.MAX_VALUE;
-            double bestAbsValue = IamMoving ? -Double.MAX_VALUE : Double.MAX_VALUE;
-
-            for (double absval : absvals) {
-                if ((IamMoving && absval >= bestAbsValue) || (!IamMoving && absval <= bestAbsValue)) {
-                    bestAbsValue = absval;
-                }
-            }
-
-            int which = -1;
-
-            for(int i = 0; i < vals.length; ++i) {
-                if (absvals[i]!=bestAbsValue) continue;
-                if ((IamMoving && vals[i] > bestValue) || (!IamMoving && vals[i] < bestValue)) {
-                    which = i;
-                    bestValue = vals[i];
-                }
-            }
-
-
-            if (which == -1)
-            {
-                //if(this.children.length == 0)
-                System.out.println("Warning! couldn't find the best UCT value " + which + " : " + this.children.length + " " +
-                        //throw new RuntimeException("Warning! couldn't find the best UCT value " + which + " : " + this.children.length + " " +
-                        + bounds[0] + " " + bounds[1]);
-                System.out.print(this.m_depth + ", AmIMoving? " + IamMoving + ";");
-                for(int i = 0; i < this.children.length; ++i)
-                    System.out.printf(" %f2", vals[i]);
-                System.out.println("; selected: " + which);
-
-                which = m_rnd.nextInt(children.length);
-            }
-
-            selected = children[which];
-
-//            System.out.print(this.m_depth + ", AmIMoving? " + IamMoving + ";");
-//            for(int i = 0; i < this.children.length; ++i)
-//                System.out.printf(" %f2", vals[i]);
-//            System.out.println("; selected: " + which);
-
-        }else
-        {
-            selected = children[bestAction];
-        }
-
-        //Roll the state. This is closed loop, we don't advance the state. We can't do open loop here because the
-        // number of actions available on a state depend on the state itself, and random events triggered by multiple
-        // runs over the same tree node would have different outcomes (i.e Examine ruins).
-        //advance(state, actions.get(selected.childIdx), true);
-
-        root.fmCallsCount++;
-
-        return selected;
-    }
-
-    private double rollOut()
-    {
-        if(params.ROLOUTS_ENABLED) {
-            GameState rolloutState = state.copy();
-            int thisDepth = this.m_depth;
-            while (!finishRollout(rolloutState, thisDepth)) {
-                EndTurn endTurn = new EndTurn(rolloutState.getActiveTribeID());
-                int bestAction = tryForceEnd(rolloutState, endTurn, thisDepth);
-                Action next = (bestAction != -1) ? endTurn : rolloutState.getAllAvailableActions().get(m_rnd.nextInt(rolloutState.getAllAvailableActions().size()));
-                advance(rolloutState, next, true);
-                thisDepth++;
-            }
-            return normalise(this.rootStateHeuristic.evaluateState(root.rootState, rolloutState), 0, 1);
-        }
-
-        return normalise(this.rootStateHeuristic.evaluateState(root.rootState, this.state), 0, 1);
-    }
-
-    private boolean finishRollout(GameState rollerState, int depth)
-    {
-        if (depth >= params.ROLLOUT_LENGTH)      //rollout end condition.
-            return true;
-
-        //end of game
-        return rollerState.isGameOver();
-    }
-
-
-    private void backUp(TreeNode node, double result, HashMap<Integer, Pair<Double, Integer>> absNodeIDToStats, HashMap<Integer, Integer> absNodeIDToSize, HashMap<Integer, ArrayList<TreeNode>> absNodeIdToNodes)
-    {
-        TreeNode n = node;
-        while(n != null)
-        {
-            n.nVisits++;
-            n.totValue += result;
-            if (result < n.bounds[0]) {
-                n.bounds[0] = result;
-            }
-            if (result > n.bounds[1]) {
-                n.bounds[1] = result;
-            }
-
-
-            int size = absNodeIdToNodes.get(n.absNodeID).size();
-            Pair<Double, Integer> lastStats = absNodeIDToStats.get(n.absNodeID);
-            Double newTot = lastStats.getFirst()*(size-1)/size + n.totValue/size;
-            Integer newVisit = lastStats.getSecond()*(size-1)/size + n.nVisits/size;
-            absNodeIDToStats.remove(n.absNodeID);
-            absNodeIDToStats.put(n.absNodeID, new Pair<>(newTot, newVisit));
-
-            n = n.parent;
-        }
-    }
-
-
-    int mostVisitedAction() {
-        int selected = -1;
-        double bestValue = -Double.MAX_VALUE;
-        boolean allEqual = true;
-        double first = -1;
-
-        for (int i=0; i<children.length; i++) {
-
-            if(children[i] != null)
-            {
-                if(first == -1)
-                    first = children[i].nVisits;
-                else if(first != children[i].nVisits)
-                {
-                    allEqual = false;
-                }
-
-                double childValue = children[i].nVisits;
-                childValue = noise(childValue, params.epsilon, this.m_rnd.nextDouble());     //break ties randomly
-                if (childValue > bestValue) {
-                    bestValue = childValue;
-                    selected = i;
-                }
-            }
-        }
-
-        if (selected == -1)
-        {
-            selected = 0;
-        }else if(allEqual)
-        {
-            //If all are equal, we opt to choose for the one with the best Q.
-            selected = bestAction();
-        }
-
-        return selected;
-    }
-
-    private int bestAction()
-    {
-        int selected = -1;
-        double bestValue = -Double.MAX_VALUE;
-
-        for (int i=0; i<children.length; i++) {
-
-            if(children[i] != null) {
-                double childValue = children[i].totValue / (children[i].nVisits + params.epsilon);
-                childValue = noise(childValue, params.epsilon, this.m_rnd.nextDouble());     //break ties randomly
-                if (childValue > bestValue) {
-                    bestValue = childValue;
-                    selected = i;
-                }
-            }
-        }
-
-        if (selected == -1)
-        {
-            System.out.println("Unexpected selection!");
-            selected = 0;
-        }
-
-        return selected;
-    }
-
-
-    private boolean notFullyExpanded() {
-        for (TreeNode tn : children) {
-            if (tn == null) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private double normalise(double a_value, double a_min, double a_max)
-    {
-        if(a_min < a_max)
-            return (a_value - a_min)/(a_max - a_min);
-        else    // if bounds are invalid, then return same value
-            return a_value;
-    }
 
     private double noise(double input, double epsilon, double random)
     {
         return (input + epsilon) * (1.0 + epsilon * (random - 0.5));
     }
 
-    public class Defence{
+    public AbstractPortfolioTreeNode[] getChildren() {
+        return children;
+    }
 
-        public final Boolean def;
-        public final Double dist;
-        public final int number;
-        public final int health;
+    public int getPruneK() {
+        return k_plus;
+    }
 
-        public Defence(Boolean def, Double dist, int number, int health){
+    public AbstractPortfolioMCTSParams getParams()
+    {
+        return params;
+    }
+}
 
-            this.def = def;
-            this.dist = dist;
-            this.number = number;
-            this.health = health;
-        }
+class Defence{
 
+    public final Boolean def;
+    public final Double dist;
+    public final int number;
+    public final int health;
+
+    public Defence(Boolean def, Double dist, int number, int health){
+
+        this.def = def;
+        this.dist = dist;
+        this.number = number;
+        this.health = health;
     }
 
 }

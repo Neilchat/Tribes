@@ -174,29 +174,29 @@ public class PortfolioTreeNode
         PortfolioTreeNode selected;
         boolean IamMoving = (state.getActiveTribeID() == this.playerID);
 
-        if(params.PRUNING && this.nVisits >= params.getPruneT(children.length)) {
-            if (k_plus == 0) {
-                //Time to prune
-                pruned = rootPruneHeuristic.prune(this, actions, state, params.getPruneKinit(children.length));
-                k_plus++;
-//                System.out.print("Depth:" + this.m_depth + ": ");
-//                params.printPruneLine(children.length);
-            }
-            else
-            {
-                //Progressive unpruning:
-                int limit = params.getUnpruneLimit(children.length, k_plus);
-                if(this.nVisits > limit)
-                {
-                    //Time to unprune
-                    boolean[] prunedNext = rootPruneHeuristic.unprune(this, actions, state, pruned, m_rnd);
-                    if(prunedNext != null) {
-                        pruned = prunedNext;
-                        k_plus++;
-                    }
-                }
-            }
-        }
+//        if(params.PRUNING && this.nVisits >= params.getPruneT(children.length)) {
+//            if (k_plus == 0) {
+//                //Time to prune
+//                pruned = rootPruneHeuristic.prune(this, actions, state, params.getPruneKinit(children.length));
+//                k_plus++;
+////                System.out.print("Depth:" + this.m_depth + ": ");
+////                params.printPruneLine(children.length);
+//            }
+//            else
+//            {
+//                //Progressive unpruning:
+//                int limit = params.getUnpruneLimit(children.length, k_plus);
+//                if(this.nVisits > limit)
+//                {
+//                    //Time to unprune
+//                    boolean[] prunedNext = rootPruneHeuristic.unprune(this, actions, state, pruned, m_rnd);
+//                    if(prunedNext != null) {
+//                        pruned = prunedNext;
+//                        k_plus++;
+//                    }
+//                }
+//            }
+//        }
 
         //No end turn, use uct.
         double[] vals = new double[this.children.length];
