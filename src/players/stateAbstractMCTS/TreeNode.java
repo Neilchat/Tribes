@@ -175,17 +175,15 @@ public class TreeNode {
     private TreeNode expand(HashMap depthToNode, HashMap<Integer, List<ArrayList<TreeNode>>> depthToNodeGroups, HashMap<Integer, Pair<Double, Integer>> absNodeIDToStats, HashMap<Integer, Integer> absNodeIDToSize, HashMap<Integer, ArrayList<TreeNode>> absNodeIDToNodes) {
 
         int bestAction = -1;
-        if(bestAction == -1)
-        {
-            //No turn end, expand
-            double bestValue = -1;
 
-            for (int i = 0; i < children.length; i++) {
-                double x = m_rnd.nextDouble();
-                if (x > bestValue && children[i] == null) {
-                    bestAction = i;
-                    bestValue = x;
-                }
+        //No turn end, expand
+        double bestValue = -1;
+
+        for (int i = 0; i < children.length; i++) {
+            double x = m_rnd.nextDouble();
+            if (x > bestValue && children[i] == null) {
+                bestAction = i;
+                bestValue = x;
             }
         }
 
