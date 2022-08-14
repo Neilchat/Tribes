@@ -5,7 +5,7 @@
   "Search Depth" : 20,
   "Force End" : false,
   "Population Size" : 1,
-  "Players" : ["MCTS", "ASPMCTS"],
+  "Players" : ["RHEA", "pMCTS"],
   "Tribes" : ["Imperius", "Xin Xi"],
   "Shift Tribes" : true,
   "Verbose" : false,

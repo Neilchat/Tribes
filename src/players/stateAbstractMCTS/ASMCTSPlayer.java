@@ -35,23 +35,10 @@ public class ASMCTSPlayer extends Agent {
     }
 
     public Action act(GameState gs, ElapsedCpuTimer ect) {
-        //Gather all available actions:
         ArrayList<Action> allActions = gs.getAllAvailableActions();
 
         if(allActions.size() == 1)
             return allActions.get(0); //EndTurn, it's possible.
-
-//        ArrayList<Action> cityActions = gs.getAllCityActions();
-//        ArrayList<Action> unitActions = gs.getAllUnitActions();
-//        ArrayList<Action> tribeActions = gs.getTribeActions();
-//
-//        boolean unitFirst = true;
-//        if (m_rnd.nextInt()%2 == 0)
-//            tribeActions.addAll(unitActions);
-//        else {
-//            tribeActions.addAll(cityActions);
-//            unitFirst = false;
-//        }
 
         String abs;
         ArrayList<Unit> opponentUnits = gs.getUnits((this.playerID+1)%2);
@@ -79,12 +66,7 @@ public class ASMCTSPlayer extends Agent {
         } else if (waterNoDock(gs)) abs = "dock";
         else abs = "advance";
 
-
-//        gs.getCities(this.playerID)
-//        for (City city :gs.getCities(this.playerID)){
-//            city.canLevelUp()
-//        }
-        TreeNode m_root = new TreeNode(params, m_rnd, allActions.size(), allActions, this.playerID, true, abs, isClose(opponentUnits, cities), isClose(units, opponentCities), nextToVillage(gs,units));
+        TreeNode m_root = new TreeNode(params, m_rnd, allActions.size(), allActions, this.playerID, abs, isClose(opponentUnits, cities), isClose(units, opponentCities), nextToVillage(gs,units));
         m_root.setRootGameState(m_root, gs, allPlayerIDs);
 
         m_root.mctsSearch(ect);

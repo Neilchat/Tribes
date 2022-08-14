@@ -601,9 +601,9 @@ public class AbstractPortfolioTreeNode
             for (City city: gs2.getCities(this.playerID)){
                 totLevel2 += city.getLevel();
             }
-            if (totLevel1 != totLevel2) {
-                System.out.print(abs);
-            }
+//            if (totLevel1 != totLevel2) {
+//                System.out.print(abs);
+//            }
             return totLevel1 == totLevel2;
         } else if (abs.equalsIgnoreCase("village")){
             boolean isCapturing1 = false;
