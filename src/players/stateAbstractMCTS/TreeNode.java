@@ -17,7 +17,7 @@ import static core.Types.ACTION.END_TURN;
 
 public class TreeNode {
 
-    private ASMCTSParams params;
+    private SMCTSParams params;
 
     private TreeNode root;
     private TreeNode parent;
@@ -42,12 +42,12 @@ public class TreeNode {
     private StateHeuristic rootStateHeuristic;
 
     //From MCTSPlayer
-    TreeNode(ASMCTSParams p, Random rnd, int num_actions, ArrayList<Action> actions, int playerID, String abs, City cityUnderAttack, City cityToAttack, Vector2d villagePos) {
+    TreeNode(SMCTSParams p, Random rnd, int num_actions, ArrayList<Action> actions, int playerID, String abs, City cityUnderAttack, City cityToAttack, Vector2d villagePos) {
         this(p, null, rnd, num_actions, actions, null, playerID, null, null, abs, cityUnderAttack, cityToAttack, villagePos);
     }
 
-    private TreeNode(ASMCTSParams p, TreeNode parent, Random rnd, int num_actions,
-                           ArrayList<Action> actions, StateHeuristic sh, int playerID, TreeNode root, GameState state, String abs, City cityUnderAttack, City cityToAttack, Vector2d villagePos) {
+    private TreeNode(SMCTSParams p, TreeNode parent, Random rnd, int num_actions,
+                     ArrayList<Action> actions, StateHeuristic sh, int playerID, TreeNode root, GameState state, String abs, City cityUnderAttack, City cityToAttack, Vector2d villagePos) {
         this.params = p;
         this.fmCallsCount = 0;
         this.parent = parent;

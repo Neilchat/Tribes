@@ -23,8 +23,8 @@ import players.portfolioMCTS.PortfolioMCTSParams;
 import players.portfolioMCTS.PortfolioMCTSPlayer;
 import players.rhea.RHEAAgent;
 import players.rhea.RHEAParams;
-import players.stateAbstractMCTS.ASMCTSParams;
-import players.stateAbstractMCTS.ASMCTSPlayer;
+import players.stateAbstractMCTS.SMCTSParams;
+import players.stateAbstractMCTS.SMCTSPlayer;
 
 import static core.Constants.*;
 import static core.Types.TRIBE.*;
@@ -75,8 +75,8 @@ class Run {
         OEP,
         EMCTS,
         PORTFOLIO_MCTS,
-        ASMCTS,
-        ASPMCTS
+        SMCTS,
+        SPMCTS
     }
 
     public static double K_INIT_MULT = 0.5;
@@ -108,8 +108,8 @@ class Run {
             case "OEP": return Run.PlayerType.OEP;
             case "pMCTS": return Run.PlayerType.PORTFOLIO_MCTS;
             case "EMCTS": return Run.PlayerType.EMCTS;
-            case "ASMCTS": return Run.PlayerType.ASMCTS;
-            case "ASPMCTS": return Run.PlayerType.ASPMCTS;
+            case "sMCTS": return Run.PlayerType.SMCTS;
+            case "spMCTS": return Run.PlayerType.SPMCTS;
         }
         throw new Exception("Error: unrecognized Player Type: " + arg);
     }
@@ -173,15 +173,15 @@ class Run {
                 mctsParams.FORCE_TURN_END = FORCE_TURN_END ? 5 : mctsParams.ROLLOUT_LENGTH + 1;
                 mctsParams.ROLOUTS_ENABLED = MCTS_ROLLOUTS;
                 return new MCTSPlayer(agentSeed, mctsParams);
-            case ASMCTS:
-                ASMCTSParams asmctsParams = new ASMCTSParams();
-                asmctsParams.stop_type = asmctsParams.STOP_FMCALLS;
-                asmctsParams.heuristic_method = asmctsParams.DIFF_HEURISTIC;
-                asmctsParams.PRIORITIZE_ROOT = true;
-                asmctsParams.ROLLOUT_LENGTH = MAX_LENGTH;
-                asmctsParams.FORCE_TURN_END = FORCE_TURN_END ? 5 : asmctsParams.ROLLOUT_LENGTH + 1;
-                asmctsParams.ROLOUTS_ENABLED = MCTS_ROLLOUTS;
-                return new ASMCTSPlayer(agentSeed, asmctsParams);
+            case SMCTS:
+                SMCTSParams SMCTSParams = new SMCTSParams();
+                SMCTSParams.stop_type = SMCTSParams.STOP_FMCALLS;
+                SMCTSParams.heuristic_method = SMCTSParams.DIFF_HEURISTIC;
+                SMCTSParams.PRIORITIZE_ROOT = true;
+                SMCTSParams.ROLLOUT_LENGTH = MAX_LENGTH;
+                SMCTSParams.FORCE_TURN_END = FORCE_TURN_END ? 5 : SMCTSParams.ROLLOUT_LENGTH + 1;
+                SMCTSParams.ROLOUTS_ENABLED = MCTS_ROLLOUTS;
+                return new SMCTSPlayer(agentSeed, SMCTSParams);
             case PORTFOLIO_MCTS:
                 PortfolioMCTSParams portfolioMCTSParams = new PortfolioMCTSParams();
                 portfolioMCTSParams.stop_type = portfolioMCTSParams.STOP_FMCALLS;
@@ -200,7 +200,7 @@ class Run {
                 if(Run.pMCTSweights != null)
                     portfolioMCTSParams.pruneHeuristic.setWeights(Run.pMCTSweights);
                 return new PortfolioMCTSPlayer(agentSeed, portfolioMCTSParams);
-            case ASPMCTS:
+            case SPMCTS:
                 AbstractPortfolioMCTSParams abstractPortfolioMCTSParams = new AbstractPortfolioMCTSParams();
                 abstractPortfolioMCTSParams.stop_type = abstractPortfolioMCTSParams.STOP_FMCALLS;
                 abstractPortfolioMCTSParams.heuristic_method = abstractPortfolioMCTSParams.DIFF_HEURISTIC;

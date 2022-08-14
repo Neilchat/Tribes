@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @SuppressWarnings("WeakerAccess")
-public class ASMCTSParams extends AlgParams{
+public class SMCTSParams extends AlgParams{
     // Parameters
     public double K = Math.sqrt(2);
     public int ROLLOUT_LENGTH = 10;//10;

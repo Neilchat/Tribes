@@ -2,34 +2,30 @@ package players.stateAbstractMCTS;
 
 import core.Types;
 import core.actions.Action;
-import core.actions.tribeactions.EndTurn;
 import core.actors.Building;
 import core.actors.City;
 import core.actors.units.Unit;
 import core.game.GameState;
 import players.Agent;
-import players.stateAbstractMCTS.ASMCTSParams;
-import players.stateAbstractMCTS.TreeNode;
 import utils.ElapsedCpuTimer;
 import utils.Vector2d;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Random;
 
-public class ASMCTSPlayer extends Agent {
+public class SMCTSPlayer extends Agent {
 
     private Random m_rnd;
-    private ASMCTSParams params;
+    private SMCTSParams params;
 
-    public ASMCTSPlayer(long seed)
+    public SMCTSPlayer(long seed)
     {
         super(seed);
         m_rnd = new Random(seed);
-        this.params = new ASMCTSParams();
+        this.params = new SMCTSParams();
     }
 
-    public ASMCTSPlayer(long seed, ASMCTSParams params) {
+    public SMCTSPlayer(long seed, SMCTSParams params) {
         this(seed);
         this.params = params;
     }
